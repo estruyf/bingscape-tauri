@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "bing-wallpaper-tauri",
+  "productName": "Bingscape",
   "version": "0.1.0",
-  "identifier": "com.eliostruyf.bing-wallpaper-tauri",
+  "identifier": "com.eliostruyf.Bingscape",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

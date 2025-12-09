@@ -26,7 +26,7 @@ Bing image as your macOS wallpaper.
 ```bash
 # Clone the repository
 git clone <your-repo-url>
-cd bing-wallpaper-tauri
+cd Bingscape
 
 # Install dependencies
 npm install
