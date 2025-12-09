@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Bing Wallpaper",
+        "title": "Bingscape",
         "width": 1000,
         "height": 680,
         "resizable": false

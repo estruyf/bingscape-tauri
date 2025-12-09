@@ -1,4 +1,4 @@
-# Bing Wallpaper for macOS
+# Bingscape
 
 A lightweight Tauri desktop app that automatically fetches and sets the daily
 Bing image as your macOS wallpaper.

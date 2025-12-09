@@ -93,7 +93,7 @@ function App() {
     <div className="page">
       <header className="hero">
         <div>
-          <p className="eyebrow">Bing Wallpaper</p>
+          <p className="eyebrow">Bingscape</p>
           <h1>Fresh wallpaper, every hour.</h1>
           <p className="lede">
             Pull the latest Bing daily image, apply it to your desktop, and keep it
