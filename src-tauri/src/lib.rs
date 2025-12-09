@@ -253,13 +253,16 @@ pub fn run() {
                 loop {
                     if background_state.load(std::sync::atomic::Ordering::SeqCst) {
                         let apply_all = background_apply_all.load(std::sync::atomic::Ordering::SeqCst);
-                        let state = handle.state::<AppState>();
-                        if let Err(err) = perform_sync(&handle, &state, apply_all) {
-                            if let Ok(mut guard) = state.last_status.lock() {
-                                guard.last_error = Some(err);
-                                guard.last_run = Some(Utc::now().to_rfc3339());
+                        let sync_handle = handle.clone();
+                        tauri::async_runtime::spawn_blocking(move || {
+                            let state = sync_handle.state::<AppState>();
+                            if let Err(err) = perform_sync(&sync_handle, &state, apply_all) {
+                                if let Ok(mut guard) = state.last_status.lock() {
+                                    guard.last_error = Some(err);
+                                    guard.last_run = Some(Utc::now().to_rfc3339());
+                                }
                             }
-                        }
+                        });
                     }
                     sleep(Duration::from_secs(60 * 60)).await;
                 }
