@@ -15,12 +15,14 @@ type SyncStatus = {
 type AppSettings = {
   auto_enabled: boolean;
   apply_all: boolean;
+  resolution: string;
 };
 
 function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [autoSync, setAutoSync] = useState(true);
   const [applyAllDisplays, setApplyAllDisplays] = useState(true);
+  const [resolution, setResolution] = useState("UHD");
   const [startAtLogin, setStartAtLogin] = useState(false);
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,15 @@ function App() {
     }
   };
 
+  const updateResolution = async (newResolution: string) => {
+    try {
+      await invoke("set_resolution", { resolution: newResolution });
+      setResolution(newResolution);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
   const toggleStartAtLogin = async (enabled: boolean) => {
     try {
       if (enabled) {
@@ -76,6 +87,7 @@ function App() {
         const settings = await invoke<AppSettings>("get_settings");
         setAutoSync(settings.auto_enabled);
         setApplyAllDisplays(settings.apply_all);
+        setResolution(settings.resolution);
 
         const autostartEnabled = await isEnabled();
         setStartAtLogin(autostartEnabled);
@@ -142,6 +154,20 @@ function App() {
               />
               <span className="slider" />
             </label>
+          </div>
+          <div className="option">
+            <div>
+              <p className="option-title">Image resolution</p>
+              <p className="option-sub">Choose between UHD or HD quality.</p>
+            </div>
+            <select
+              value={resolution}
+              onChange={(e) => updateResolution(e.target.value)}
+              className="resolution-select"
+            >
+              <option value="UHD">UHD (3840x2160)</option>
+              <option value="1920x1080">HD (1920x1080)</option>
+            </select>
           </div>
           <div className="option">
             <div>

@@ -19,6 +19,7 @@ use tauri::ActivationPolicy;
 struct AppState {
     auto_enabled: Arc<std::sync::atomic::AtomicBool>,
     apply_all: Arc<std::sync::atomic::AtomicBool>,
+    resolution: Mutex<String>,
     last_status: Mutex<SyncStatus>,
 }
 
@@ -35,6 +36,7 @@ struct SyncStatus {
 struct AppSettings {
     auto_enabled: bool,
     apply_all: bool,
+    resolution: String,
 }
 
 impl Default for AppSettings {
@@ -42,6 +44,7 @@ impl Default for AppSettings {
         Self {
             auto_enabled: true,
             apply_all: true,
+            resolution: "UHD".to_string(),
         }
     }
 }
@@ -58,7 +61,12 @@ fn set_auto_sync(enabled: bool, apply_all: bool, state: State<'_, AppState>, app
     
     // Persist to store
     if let Ok(store) = app.store("settings.json") {
-        let settings = AppSettings { auto_enabled: enabled, apply_all };
+        let resolution = state.resolution.lock().map_err(|e| e.to_string())?;
+        let settings = AppSettings {
+            auto_enabled: enabled,
+            apply_all,
+            resolution: resolution.clone(),
+        };
         let _ = store.set("app_settings", serde_json::to_value(settings).unwrap_or_default());
         let _ = store.save();
     }
@@ -71,6 +79,7 @@ fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
     Ok(AppSettings {
         auto_enabled: state.auto_enabled.load(std::sync::atomic::Ordering::SeqCst),
         apply_all: state.apply_all.load(std::sync::atomic::Ordering::SeqCst),
+        resolution: state.resolution.lock().map_err(|e| e.to_string())?.clone(),
     })
 }
 
@@ -81,6 +90,24 @@ fn get_status(state: State<'_, AppState>) -> Result<SyncStatus, String> {
         .lock()
         .map_err(|e| e.to_string())?
         .clone())
+}
+
+#[tauri::command]
+fn set_resolution(resolution: String, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
+    *state.resolution.lock().map_err(|e| e.to_string())? = resolution.clone();
+    
+    // Persist to store
+    if let Ok(store) = app.store("settings.json") {
+        let settings = AppSettings {
+            auto_enabled: state.auto_enabled.load(std::sync::atomic::Ordering::SeqCst),
+            apply_all: state.apply_all.load(std::sync::atomic::Ordering::SeqCst),
+            resolution,
+        };
+        let _ = store.set("app_settings", serde_json::to_value(settings).unwrap_or_default());
+        let _ = store.save();
+    }
+    
+    Ok(())
 }
 
 fn set_wallpaper(path: &PathBuf, apply_all: bool) -> Result<(), String> {
@@ -133,7 +160,17 @@ fn perform_sync(app: &tauri::AppHandle, state: &State<'_, AppState>, apply_all: 
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Unexpected Bing API response".to_string())?;
 
-    let image_url = format!("https://www.bing.com{}", image_path);
+    // Get resolution setting and modify URL
+    let resolution = state.resolution.lock().map_err(|e| e.to_string())?;
+    let modified_path = if resolution.as_str() == "UHD" || resolution.as_str() == "1920x1080" {
+        // Replace the resolution in the path (e.g., _1920x1080.jpg -> _UHD.jpg)
+        let re = regex::Regex::new(r"_\d+x\d+").unwrap();
+        re.replace(image_path, format!("_{}", resolution.as_str()).as_str()).to_string()
+    } else {
+        image_path.to_string()
+    };
+
+    let image_url = format!("https://www.bing.com{}", modified_path);
 
     let cache_dir = app
         .path()
@@ -234,6 +271,9 @@ pub fn run() {
                     if let Ok(settings) = serde_json::from_value::<AppSettings>(settings_value.clone()) {
                         app_state.store(settings.auto_enabled, std::sync::atomic::Ordering::SeqCst);
                         apply_all_state.store(settings.apply_all, std::sync::atomic::Ordering::SeqCst);
+                        if let Ok(mut resolution) = app.state::<AppState>().resolution.lock() {
+                            *resolution = settings.resolution;
+                        }
                     }
                 }
             }
@@ -271,7 +311,7 @@ pub fn run() {
             Ok(())
         })
         .manage(state)
-        .invoke_handler(tauri::generate_handler![sync_wallpaper, set_auto_sync, get_status, get_settings])
+        .invoke_handler(tauri::generate_handler![sync_wallpaper, set_auto_sync, get_status, get_settings, set_resolution])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

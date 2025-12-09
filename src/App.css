@@ -296,6 +296,34 @@ h1 {
   font-size: 14px;
 }
 
+.resolution-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e9eef6;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.resolution-select:hover {
+  border-color: rgba(104, 198, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.resolution-select:focus {
+  outline: none;
+  border-color: #68c6ff;
+  box-shadow: 0 0 0 2px rgba(104, 198, 255, 0.2);
+}
+
+.resolution-select option {
+  background: #0d1117;
+  color: #e9eef6;
+}
+
 @media (max-width: 720px) {
   .hero {
     flex-direction: column;
