@@ -1,15 +1,17 @@
 <div align="center">
   <img src="app-icon.png" alt="Bingscape Icon" width="128" height="128">
-                                              
+                                                
   # Bingscape
-                                              
+                                                
   **A lightweight Tauri desktop app that automatically fetches and sets the
   daily Bing image as your macOS wallpaper.**
+    
+  
   [![macOS](https://img.shields.io/badge/macOS-10.15+-blue.svg)](https://www.apple.com/macos/)
   [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB.svg)](https://tauri.app/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-19.1-61DAFB.svg)](https://reactjs.org/)
-                                              
+                                                
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
 </div>
 
@@ -125,7 +127,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 <div align="center">
   Made with ❤️ for macOS developers and designers
-                        
+                          
   **[⬆ back to top](#bingscape)**
 </div>
 
