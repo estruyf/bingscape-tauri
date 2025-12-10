@@ -40,6 +40,7 @@ struct AppSettings {
     auto_enabled: bool,
     apply_all: bool,
     resolution: String,
+    current_idx: u32,
 }
 
 impl Default for AppSettings {
@@ -48,6 +49,7 @@ impl Default for AppSettings {
             auto_enabled: true,
             apply_all: true,
             resolution: "UHD".to_string(),
+            current_idx: 0,
         }
     }
 }
@@ -56,6 +58,7 @@ impl Default for AppSettings {
 fn sync_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<SyncStatus, String> {
     // Reset to today's wallpaper
     *state.current_idx.lock().map_err(|e| e.to_string())? = 0;
+    let _ = save_current_idx(&app, &state);
     perform_sync(&app, &state, apply_all, 0)
 }
 
@@ -68,6 +71,7 @@ fn previous_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::A
     }
     let idx = *current_idx;
     drop(current_idx);
+    let _ = save_current_idx(&app, &state);
     perform_sync(&app, &state, apply_all, idx)
 }
 
@@ -79,6 +83,7 @@ fn next_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHa
     }
     let idx = *current_idx;
     drop(current_idx);
+    let _ = save_current_idx(&app, &state);
     perform_sync(&app, &state, apply_all, idx)
 }
 
@@ -86,6 +91,7 @@ fn next_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHa
 fn reset_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<SyncStatus, String> {
     // Reset to today's wallpaper
     *state.current_idx.lock().map_err(|e| e.to_string())? = 0;
+    let _ = save_current_idx(&app, &state);
     perform_sync(&app, &state, apply_all, 0)
 }
 
@@ -97,10 +103,12 @@ fn set_auto_sync(enabled: bool, apply_all: bool, state: State<'_, AppState>, app
     // Persist to store
     if let Ok(store) = app.store("settings.json") {
         let resolution = state.resolution.lock().map_err(|e| e.to_string())?;
+        let current_idx = *state.current_idx.lock().map_err(|e| e.to_string())?;
         let settings = AppSettings {
             auto_enabled: enabled,
             apply_all,
             resolution: resolution.clone(),
+            current_idx,
         };
         let _ = store.set("app_settings", serde_json::to_value(settings).unwrap_or_default());
         let _ = store.save();
@@ -115,6 +123,7 @@ fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
         auto_enabled: state.auto_enabled.load(std::sync::atomic::Ordering::SeqCst),
         apply_all: state.apply_all.load(std::sync::atomic::Ordering::SeqCst),
         resolution: state.resolution.lock().map_err(|e| e.to_string())?.clone(),
+        current_idx: *state.current_idx.lock().map_err(|e| e.to_string())?,
     })
 }
 
@@ -133,15 +142,32 @@ fn set_resolution(resolution: String, state: State<'_, AppState>, app: tauri::Ap
     
     // Persist to store
     if let Ok(store) = app.store("settings.json") {
+        let current_idx = *state.current_idx.lock().map_err(|e| e.to_string())?;
         let settings = AppSettings {
             auto_enabled: state.auto_enabled.load(std::sync::atomic::Ordering::SeqCst),
             apply_all: state.apply_all.load(std::sync::atomic::Ordering::SeqCst),
             resolution,
+            current_idx,
         };
         let _ = store.set("app_settings", serde_json::to_value(settings).unwrap_or_default());
         let _ = store.save();
     }
     
+    Ok(())
+}
+
+fn save_current_idx(app: &tauri::AppHandle, state: &State<'_, AppState>) -> Result<(), String> {
+    if let Ok(store) = app.store("settings.json") {
+        let current_idx = *state.current_idx.lock().map_err(|e| e.to_string())?;
+        let settings = AppSettings {
+            auto_enabled: state.auto_enabled.load(std::sync::atomic::Ordering::SeqCst),
+            apply_all: state.apply_all.load(std::sync::atomic::Ordering::SeqCst),
+            resolution: state.resolution.lock().map_err(|e| e.to_string())?.clone(),
+            current_idx,
+        };
+        let _ = store.set("app_settings", serde_json::to_value(settings).unwrap_or_default());
+        let _ = store.save();
+    }
     Ok(())
 }
 
@@ -385,6 +411,9 @@ pub fn run() {
                         if let Ok(mut resolution) = app.state::<AppState>().resolution.lock() {
                             *resolution = settings.resolution;
                         }
+                        if let Ok(mut current_idx) = app.state::<AppState>().current_idx.lock() {
+                            *current_idx = settings.current_idx;
+                        }
                     }
                 }
             }
@@ -398,7 +427,8 @@ pub fn run() {
             let initial_apply_all = background_apply_all.load(std::sync::atomic::Ordering::SeqCst);
             std::thread::spawn(move || {
                 let initial_state = initial_handle.state::<AppState>();
-                let _ = perform_sync(&initial_handle, &initial_state, initial_apply_all, 0);
+                let saved_idx = initial_state.current_idx.lock().map(|idx| *idx).unwrap_or(0);
+                let _ = perform_sync(&initial_handle, &initial_state, initial_apply_all, saved_idx);
             });
 
             // Show and focus the window on initial startup
@@ -415,11 +445,9 @@ pub fn run() {
                         let sync_handle = handle.clone();
                         tauri::async_runtime::spawn_blocking(move || {
                             let state = sync_handle.state::<AppState>();
-                            // Reset to today's wallpaper for automatic syncs
-                            if let Ok(mut idx) = state.current_idx.lock() {
-                                *idx = 0;
-                            }
-                            if let Err(err) = perform_sync(&sync_handle, &state, apply_all, 0) {
+                            // Use the saved current_idx for automatic syncs
+                            let saved_idx = state.current_idx.lock().map(|idx| *idx).unwrap_or(0);
+                            if let Err(err) = perform_sync(&sync_handle, &state, apply_all, saved_idx) {
                                 if let Ok(mut guard) = state.last_status.lock() {
                                     guard.last_error = Some(err);
                                     guard.last_run = Some(Utc::now().to_rfc3339());
