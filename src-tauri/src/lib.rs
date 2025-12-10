@@ -56,10 +56,9 @@ impl Default for AppSettings {
 
 #[tauri::command]
 fn sync_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<SyncStatus, String> {
-    // Reset to today's wallpaper
-    *state.current_idx.lock().map_err(|e| e.to_string())? = 0;
-    let _ = save_current_idx(&app, &state);
-    perform_sync(&app, &state, apply_all, 0)
+    // Use the currently selected wallpaper index
+    let current_idx = *state.current_idx.lock().map_err(|e| e.to_string())?;
+    perform_sync(&app, &state, apply_all, current_idx)
 }
 
 #[tauri::command]
