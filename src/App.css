@@ -233,6 +233,11 @@ h1 {
   cursor: not-allowed;
 }
 
+.ghost.small {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
 .meta {
   list-style: none;
   padding: 0;

@@ -78,6 +78,15 @@ function App() {
     }
   };
 
+  const handleClearCache = async () => {
+    try {
+      const result = await invoke<string>("clear_cache");
+      alert(result);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -120,7 +129,7 @@ function App() {
         </div>
         <div className="pill">
           <span className={`status-dot ${isSyncing ? "warn" : "ok"}`} />
-          {isSyncing ? "Updating wallpaper" : "Idle and ready"}
+          {isSyncing ? "Updating wallpaper" : "Ready"}
         </div>
       </header>
 
@@ -182,6 +191,15 @@ function App() {
               />
               <span className="slider" />
             </label>
+          </div>
+          <div className="option">
+            <div>
+              <p className="option-title">Clear cache</p>
+              <p className="option-sub">Remove all cached wallpaper images.</p>
+            </div>
+            <button className="ghost small" onClick={handleClearCache}>
+              Clear
+            </button>
           </div>
         </div>
 

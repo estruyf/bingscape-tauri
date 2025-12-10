@@ -16,7 +16,9 @@
         "title": "Bingscape",
         "width": 1000,
         "height": 680,
-        "resizable": false
+        "resizable": false,
+        "focus": true,
+        "alwaysOnTop": false
       }
     ],
     "security": {
@@ -32,6 +34,7 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": ["icons/dark-logo.png", "icons/light-logo.png"]
   }
 }

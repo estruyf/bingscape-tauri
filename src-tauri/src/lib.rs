@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::{Arc, Mutex}, time::Duration};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, State, WindowEvent,
@@ -110,6 +111,22 @@ fn set_resolution(resolution: String, state: State<'_, AppState>, app: tauri::Ap
     Ok(())
 }
 
+#[tauri::command]
+fn clear_cache(app: tauri::AppHandle) -> Result<String, String> {
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("Failed to locate cache dir: {e}"))?;
+
+    if cache_dir.exists() {
+        std::fs::remove_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+        Ok("Cache cleared successfully".to_string())
+    } else {
+        Ok("Cache directory does not exist".to_string())
+    }
+}
+
 fn set_wallpaper(path: &PathBuf, apply_all: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -162,10 +179,14 @@ fn perform_sync(app: &tauri::AppHandle, state: &State<'_, AppState>, apply_all: 
 
     // Get resolution setting and modify URL
     let resolution = state.resolution.lock().map_err(|e| e.to_string())?;
-    let modified_path = if resolution.as_str() == "UHD" || resolution.as_str() == "1920x1080" {
+    let modified_path = if resolution.as_str() == "UHD" {
         // Replace the resolution in the path (e.g., _1920x1080.jpg -> _UHD.jpg)
-        let re = regex::Regex::new(r"_\d+x\d+").unwrap();
-        re.replace(image_path, format!("_{}", resolution.as_str()).as_str()).to_string()
+        let re = regex::Regex::new(r"_\d+x\d+\.jpg").unwrap();
+        re.replace(image_path, "_UHD.jpg").to_string()
+    } else if resolution.as_str() == "1920x1080" {
+        // Ensure it's using 1920x1080
+        let re = regex::Regex::new(r"_\d+x\d+\.jpg").unwrap();
+        re.replace(image_path, "_1920x1080.jpg").to_string()
     } else {
         image_path.to_string()
     };
@@ -179,10 +200,23 @@ fn perform_sync(app: &tauri::AppHandle, state: &State<'_, AppState>, apply_all: 
 
     std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
 
-    let filename = image_url
-        .split('/')
-        .last()
-        .unwrap_or("bing_wallpaper.jpg");
+    // Extract clean filename from URL
+    // URL format: /th?id=OHR.LlamaDay_EN-US5971354659_UHD.jpg&rf=...
+    // We want: LlamaDay_EN-US5971354659_UHD.jpg or just use date-based naming
+    let filename = if let Some(id_param) = modified_path.split("id=").nth(1) {
+        if let Some(name_part) = id_param.split('&').next() {
+            // Extract the part after "OHR."
+            if let Some(clean_name) = name_part.strip_prefix("OHR.") {
+                clean_name.to_string()
+            } else {
+                name_part.to_string()
+            }
+        } else {
+            "bing_wallpaper.jpg".to_string()
+        }
+    } else {
+        "bing_wallpaper.jpg".to_string()
+    };
     let save_path = cache_dir.join(filename);
 
     let bytes = client
@@ -238,8 +272,25 @@ pub fn run() {
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&quit_item])?;
 
+            // Load tray icon - use template image for macOS dark/light mode support
+            #[cfg(target_os = "macos")]
+            let tray_icon = {
+                // On macOS, load the light icon and mark it as template for automatic dark/light adaptation
+                let icon_path = app.path().resource_dir()?.join("icons/light-logo.png");
+                let icon_bytes = std::fs::read(icon_path)?;
+                let icon_image = image::load_from_memory(&icon_bytes)
+                    .map_err(|e| tauri::Error::AssetNotFound(format!("Failed to load icon: {}", e)))?;
+                let icon_rgba = icon_image.to_rgba8();
+                let (width, height) = icon_rgba.dimensions();
+                Image::new_owned(icon_rgba.into_raw(), width, height)
+            };
+            
+            #[cfg(not(target_os = "macos"))]
+            let tray_icon = app.default_window_icon().unwrap().clone();
+
             let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
+                .icon_as_template(true)  // macOS: treat as template for dark/light mode
                 .tooltip("Bingscape")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -258,6 +309,7 @@ pub fn run() {
                     {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
@@ -290,6 +342,13 @@ pub fn run() {
                 let _ = perform_sync(&initial_handle, &initial_state, initial_apply_all);
             });
 
+            // Show and focus the window on initial startup
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
             tauri::async_runtime::spawn(async move {
                 loop {
                     if background_state.load(std::sync::atomic::Ordering::SeqCst) {
@@ -311,7 +370,7 @@ pub fn run() {
             Ok(())
         })
         .manage(state)
-        .invoke_handler(tauri::generate_handler![sync_wallpaper, set_auto_sync, get_status, get_settings, set_resolution])
+        .invoke_handler(tauri::generate_handler![sync_wallpaper, set_auto_sync, get_status, get_settings, set_resolution, clear_cache])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
