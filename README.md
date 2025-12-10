@@ -1,15 +1,15 @@
 <div align="center">
   <img src="app-icon.png" alt="Bingscape Icon" width="128" height="128">
-                                
+                                              
   # Bingscape
-                                
+                                              
   **A lightweight Tauri desktop app that automatically fetches and sets the
   daily Bing image as your macOS wallpaper.**
   [![macOS](https://img.shields.io/badge/macOS-10.15+-blue.svg)](https://www.apple.com/macos/)
   [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8DB.svg)](https://tauri.app/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-19.1-61DAFB.svg)](https://reactjs.org/)
-                                
+                                              
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
 </div>
 
@@ -22,6 +22,14 @@
 - **Background Operation**: Runs without a dock icon; access via system tray
 - **Start at Login**: Optional auto-start when you log in
 - **Settings Persistence**: Your preferences are saved across restarts
+
+## 📸 Screenshots
+
+<div align="center">
+  <img src="screenshot.png" alt="Bingscape Main Interface" width="600">
+  <p><em>Clean, intuitive interface to manually or automatically update your
+  wallpaper.</em></p>
+</div>
 
 ## Getting Started
 
@@ -114,3 +122,16 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+
+<div align="center">
+  Made with ❤️ for macOS developers and designers
+                        
+  **[⬆ back to top](#bingscape)**
+</div>
+
+<div align="center">
+   <a
+   href="https://visitorbadge.io/status?path=https%3A%2F%2Fgithub.com%2Festruyf%2Fbingscape"><img
+   src="https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2Festruyf%2Fbingscape&countColor=%23263759"
+   /></a>
+</div>
