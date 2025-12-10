@@ -10,6 +10,7 @@ type SyncStatus = {
   last_result?: string | null;
   last_error?: string | null;
   last_run?: string | null;
+  current_idx?: number;
 };
 
 type AppSettings = {
@@ -38,6 +39,51 @@ function App() {
     setError(null);
     try {
       const result = await invoke<SyncStatus>("sync_wallpaper", {
+        applyAll: applyAllDisplays,
+      });
+      setStatus(result);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const goToPreviousWallpaper = async () => {
+    setIsSyncing(true);
+    setError(null);
+    try {
+      const result = await invoke<SyncStatus>("previous_wallpaper", {
+        applyAll: applyAllDisplays,
+      });
+      setStatus(result);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const goToNextWallpaper = async () => {
+    setIsSyncing(true);
+    setError(null);
+    try {
+      const result = await invoke<SyncStatus>("next_wallpaper", {
+        applyAll: applyAllDisplays,
+      });
+      setStatus(result);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const resetWallpaper = async () => {
+    setIsSyncing(true);
+    setError(null);
+    try {
+      const result = await invoke<SyncStatus>("reset_wallpaper", {
         applyAll: applyAllDisplays,
       });
       setStatus(result);
@@ -125,6 +171,37 @@ function App() {
               {isSyncing ? "Syncing..." : "Sync now"}
             </button>
             <span className="hint">Manual sync anytime.</span>
+          </div>
+          <div className="wallpaper-nav">
+            <button
+              className="ghost small"
+              onClick={goToPreviousWallpaper}
+              disabled={isSyncing || (status?.current_idx ?? 0) >= 7}
+              title="Go back to previous day's wallpaper"
+            >
+              ← Previous
+            </button>
+            <span className="hint">
+              {status?.current_idx === 0 ? "Today" : `${status?.current_idx} day${(status?.current_idx ?? 0) > 1 ? 's' : ''} ago`}
+            </span>
+            <button
+              className="ghost small"
+              onClick={goToNextWallpaper}
+              disabled={isSyncing || (status?.current_idx ?? 0) === 0}
+              title="Go forward to newer wallpaper"
+            >
+              Next →
+            </button>
+            {(status?.current_idx ?? 0) > 0 && (
+              <button
+                className="ghost small reset"
+                onClick={resetWallpaper}
+                disabled={isSyncing}
+                title="Reset to today's wallpaper"
+              >
+                ↻ Reset
+              </button>
+            )}
           </div>
         </div>
         <div className="pill">

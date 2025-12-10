@@ -67,6 +67,21 @@ h1 {
   gap: 14px;
 }
 
+.wallpaper-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.wallpaper-nav .reset {
+  margin-left: auto;
+  background: rgba(104, 198, 255, 0.15);
+  border-color: rgba(104, 198, 255, 0.3);
+}
+
 .primary {
   padding: 12px 18px;
   border-radius: 12px;

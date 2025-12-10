@@ -22,6 +22,7 @@ struct AppState {
     apply_all: Arc<std::sync::atomic::AtomicBool>,
     resolution: Mutex<String>,
     last_status: Mutex<SyncStatus>,
+    current_idx: Mutex<u32>,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -31,6 +32,7 @@ struct SyncStatus {
     last_result: Option<String>,
     last_error: Option<String>,
     last_run: Option<String>,
+    current_idx: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +54,39 @@ impl Default for AppSettings {
 
 #[tauri::command]
 fn sync_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<SyncStatus, String> {
-    perform_sync(&app, &state, apply_all)
+    // Reset to today's wallpaper
+    *state.current_idx.lock().map_err(|e| e.to_string())? = 0;
+    perform_sync(&app, &state, apply_all, 0)
+}
+
+#[tauri::command]
+fn previous_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<SyncStatus, String> {
+    let mut current_idx = state.current_idx.lock().map_err(|e| e.to_string())?;
+    // Bing API supports idx up to 7 (8 days of history)
+    if *current_idx < 7 {
+        *current_idx += 1;
+    }
+    let idx = *current_idx;
+    drop(current_idx);
+    perform_sync(&app, &state, apply_all, idx)
+}
+
+#[tauri::command]
+fn next_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<SyncStatus, String> {
+    let mut current_idx = state.current_idx.lock().map_err(|e| e.to_string())?;
+    if *current_idx > 0 {
+        *current_idx -= 1;
+    }
+    let idx = *current_idx;
+    drop(current_idx);
+    perform_sync(&app, &state, apply_all, idx)
+}
+
+#[tauri::command]
+fn reset_wallpaper(apply_all: bool, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<SyncStatus, String> {
+    // Reset to today's wallpaper
+    *state.current_idx.lock().map_err(|e| e.to_string())? = 0;
+    perform_sync(&app, &state, apply_all, 0)
 }
 
 #[tauri::command]
@@ -156,15 +190,15 @@ fn set_wallpaper(path: &PathBuf, apply_all: bool) -> Result<(), String> {
     }
 }
 
-fn perform_sync(app: &tauri::AppHandle, state: &State<'_, AppState>, apply_all: bool) -> Result<SyncStatus, String> {
+fn perform_sync(app: &tauri::AppHandle, state: &State<'_, AppState>, apply_all: bool, idx: u32) -> Result<SyncStatus, String> {
     let client = Client::builder()
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
 
-    let api = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US";
+    let api = format!("https://www.bing.com/HPImageArchive.aspx?format=js&idx={}&n=1&mkt=en-US", idx);
     let response: serde_json::Value = client
-        .get(api)
+        .get(&api)
         .send()
         .map_err(|e| e.to_string())?
         .json()
@@ -179,16 +213,40 @@ fn perform_sync(app: &tauri::AppHandle, state: &State<'_, AppState>, apply_all: 
 
     // Get resolution setting and modify URL
     let resolution = state.resolution.lock().map_err(|e| e.to_string())?;
-    let modified_path = if resolution.as_str() == "UHD" {
-        // Replace the resolution in the path (e.g., _1920x1080.jpg -> _UHD.jpg)
-        let re = regex::Regex::new(r"_\d+x\d+\.jpg").unwrap();
-        re.replace(image_path, "_UHD.jpg").to_string()
-    } else if resolution.as_str() == "1920x1080" {
-        // Ensure it's using 1920x1080
-        let re = regex::Regex::new(r"_\d+x\d+\.jpg").unwrap();
-        re.replace(image_path, "_1920x1080.jpg").to_string()
-    } else {
-        image_path.to_string()
+    let modified_path = {
+        // Split URL into path and query params
+        let (base_url, query_params) = if let Some(pos) = image_path.find('&') {
+            (&image_path[..pos], Some(&image_path[pos..]))
+        } else {
+            (image_path, None)
+        };
+        
+        // Remove .jpg extension if present
+        let base_path = if let Some(pos) = base_url.rfind(".jpg") {
+            &base_url[..pos]
+        } else {
+            base_url
+        };
+        
+        // Remove any existing resolution pattern like _1920x1080 or _UHD
+        let re = regex::Regex::new(r"_(?:UHD|\d+x\d+)$").unwrap();
+        let clean_base = re.replace(base_path, "");
+        
+        // Add the desired resolution suffix
+        let path_with_resolution = if resolution.as_str() == "UHD" {
+            format!("{}_UHD.jpg", clean_base)
+        } else if resolution.as_str() == "1920x1080" {
+            format!("{}_1920x1080.jpg", clean_base)
+        } else {
+            format!("{}_UHD.jpg", clean_base)
+        };
+        
+        // Reconstruct with query params if they existed
+        if let Some(params) = query_params {
+            format!("{}{}", path_with_resolution, params)
+        } else {
+            path_with_resolution
+        }
     };
 
     let image_url = format!("https://www.bing.com{}", modified_path);
@@ -240,6 +298,7 @@ fn perform_sync(app: &tauri::AppHandle, state: &State<'_, AppState>, apply_all: 
     });
     status.last_error = None;
     status.last_run = Some(chrono::Utc::now().to_rfc3339());
+    status.current_idx = idx;
     *state.last_status.lock().map_err(|e| e.to_string())? = status.clone();
 
     Ok(status)
@@ -339,7 +398,7 @@ pub fn run() {
             let initial_apply_all = background_apply_all.load(std::sync::atomic::Ordering::SeqCst);
             std::thread::spawn(move || {
                 let initial_state = initial_handle.state::<AppState>();
-                let _ = perform_sync(&initial_handle, &initial_state, initial_apply_all);
+                let _ = perform_sync(&initial_handle, &initial_state, initial_apply_all, 0);
             });
 
             // Show and focus the window on initial startup
@@ -356,7 +415,11 @@ pub fn run() {
                         let sync_handle = handle.clone();
                         tauri::async_runtime::spawn_blocking(move || {
                             let state = sync_handle.state::<AppState>();
-                            if let Err(err) = perform_sync(&sync_handle, &state, apply_all) {
+                            // Reset to today's wallpaper for automatic syncs
+                            if let Ok(mut idx) = state.current_idx.lock() {
+                                *idx = 0;
+                            }
+                            if let Err(err) = perform_sync(&sync_handle, &state, apply_all, 0) {
                                 if let Ok(mut guard) = state.last_status.lock() {
                                     guard.last_error = Some(err);
                                     guard.last_run = Some(Utc::now().to_rfc3339());
@@ -370,7 +433,7 @@ pub fn run() {
             Ok(())
         })
         .manage(state)
-        .invoke_handler(tauri::generate_handler![sync_wallpaper, set_auto_sync, get_status, get_settings, set_resolution, clear_cache])
+        .invoke_handler(tauri::generate_handler![sync_wallpaper, previous_wallpaper, next_wallpaper, reset_wallpaper, set_auto_sync, get_status, get_settings, set_resolution, clear_cache])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
